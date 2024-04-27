@@ -1,0 +1,94 @@
+<h1>Desmos Image Builder (heavy work in progress)</h1>
+<p>Upload an image</p>
+<input id="fileInput" type="file" accept="image/*">
+<p>Sampling:</p>
+<input type="range" id="sampling" min="1" value="8" max="16" onchange="updateSampling()"><label id="samplingDisplay"
+    for="sampling">8 pixels</label>
+<p>Preview:</p>
+<canvas id="canvas"></canvas>
+<p>Output</p>
+<p id="outputCircles">Data goes here...</p>
+<p id="outputBrightness">Data goes here...</p>
+<textarea id="output" cols=50 rows=5></textarea>
+<script>
+    var hasImage = false;
+    var sampling = 8;
+
+    function updateSampling() {
+        sampling = Number.parseInt(document.getElementById("sampling").value);
+        document.getElementById("samplingDisplay").textContent = sampling + " pixels"
+        if (hasImage) getCircles(sampling);
+    }
+
+    var fileInput = document.getElementById('fileInput');
+    fileInput.addEventListener('change', handleImage, false);
+
+    function handleImage(e) {
+        let canvas = document.getElementById('canvas');
+        let ctx = canvas.getContext('2d');
+
+        var reader = new FileReader();
+        reader.onload = function (event) {
+            var img = new Image();
+            img.onload = function () {
+                canvas.width = img.width;
+                canvas.height = img.height;
+
+                ctx.drawImage(img, 0, 0);
+                getCircles(sampling);
+                hasImage = true;
+            }
+            img.src = event.target.result;
+        }
+        reader.readAsDataURL(e.target.files[0]);
+    }
+
+    function getCircles(sampleSize = 1) {
+        let canvas = document.getElementById("canvas");
+        let ctx = canvas.getContext("2d");
+
+        let data = Array.from(ctx.getImageData(0, 0, canvas.width, canvas.height).data);
+        let width = canvas.width;
+        let height = canvas.height;
+
+        console.log("Generating image with width " + width + " and height " + height);
+
+        let circleText = "";
+
+        let planarX = 0;
+        let planarY = 0;
+
+        let filled = 0;
+        let percent = 0;
+        let total = 0;
+        for (let y = height; y >= 0; y -= sampleSize) {
+            for (let x = 0; x < width; x += sampleSize) {
+                total++;
+                let dataIndex = (x + y * width) * 4;
+                let brightness = 0.5 * (1 - getBrightness(data[dataIndex], data[dataIndex + 1], data[dataIndex + 2], data[dataIndex + 3]));
+                let roundedBrightness = Math.round((brightness + Number.EPSILON) * 100) / 100
+                if (roundedBrightness > 0.15) {
+                    percent += 2 * roundedBrightness;
+                    filled++;
+                    circleText += `(x-${planarX / 2})^{2}+(y-${planarY / 2})^{2}${"\\"}le${roundedBrightness}^{2}\n`;
+                }
+                planarX++;
+            }
+            planarX = 0;
+            planarY++;
+        }
+
+        document.getElementById("outputCircles").innerHTML = "Circles filled: " + filled + "/" + total + " pixels (" + ((filled / total) * 100).toFixed(2).toString() + "%)";
+        document.getElementById("outputBrightness").innerHTML = "Brightness filled: " + percent + "/" + total + " pixels (" + ((percent / total) * 100).toFixed(2).toString() + "%)";
+        document.getElementById("output").value = circleText;
+    }
+
+    // (x-0)^{2}+(y-0)^{2}\le0.5^{2}
+
+    function getBrightness(red, green, blue, alpha = 255) {
+        if (alpha < 20) return 0;
+        return (alpha / 255) * ((0.33 * red / 255) + (0.34 * green / 255) + (0.33 * blue / 255));
+        //return (0.21 * red/255) + (0.72 * green/255) + (0.07 * blue/255);
+    }
+
+</script>
